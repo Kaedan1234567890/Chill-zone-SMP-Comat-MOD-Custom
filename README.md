@@ -62,3 +62,9 @@ The one-file server artifact will appear in:
 `build/fork-libs/chill-zone-combat-1.1.0-chillzone-phase1.jar`
 
 When testing the fork later, remove both the old standalone Combat JAR and the old PvP Rank Admin add-on JAR so there is only one `combat` mod ID on the server.
+
+
+## Phase 1 Fix 1
+
+- Fixed Gradle 9/Loom task-realization recursion in the custom `forkJar` task by making the `remapJar` archive lookup lazy.
+- No gameplay/rank behavior was changed in this fix.

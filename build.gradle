@@ -43,15 +43,24 @@ java {
 
 // Produce ONE server mod JAR. It starts with the original MIT Combat JAR,
 // replaces the classes/resources we now own in source, and adds Chill Zone code.
+//
+// IMPORTANT: keep the remapJar archive lookup lazy. Forcing remapJar with .get()
+// while Gradle is still realizing forkJar can recursively realize Jar tasks under
+// Gradle 9.x/Loom and fail before compilation even starts.
+def remapJarTask = tasks.named('remapJar')
+
 tasks.register('forkJar', Jar) {
-    dependsOn tasks.named('remapJar')
+    dependsOn remapJarTask
     archiveBaseName = 'chill-zone-combat'
     archiveVersion = project.version
     destinationDirectory = layout.buildDirectory.dir('fork-libs')
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
+    inputs.file(layout.projectDirectory.file('libs/original-combat-1.0.0.jar'))
+    inputs.file(remapJarTask.flatMap { it.archiveFile })
+
     // Keep the original GUI/combat implementation for features not ported yet.
-    from(zipTree('libs/original-combat-1.0.0.jar')) {
+    from({ zipTree(layout.projectDirectory.file('libs/original-combat-1.0.0.jar').asFile) }) {
         exclude 'fabric.mod.json'
         exclude 'META-INF/MANIFEST.MF'
         // Phase 1 replaces the old 20-heart / permanent potion-effect mixin.
@@ -59,7 +68,8 @@ tasks.register('forkJar', Jar) {
     }
 
     // Our remapped classes/resources take priority for everything we replace.
-    from(zipTree(tasks.named('remapJar').get().archiveFile)) {
+    // This closure is evaluated only when forkJar executes, after remapJar exists.
+    from({ zipTree(remapJarTask.get().archiveFile.get().asFile) }) {
         exclude 'META-INF/MANIFEST.MF'
     }
 
