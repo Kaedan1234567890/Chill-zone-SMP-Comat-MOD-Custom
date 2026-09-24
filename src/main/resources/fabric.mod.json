@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "combat",
+  "name": "Chill Zone Combat",
+  "version": "${version}",
+  "description": "Chill Zone SMP fork of the MIT Combat mod, with a maintainable Top 10 PvP rank system.",
+  "authors": ["Antigravity (original Combat mod)", "Chill Zone SMP"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.chillzone.combat.ChillZoneCombatExtension",
+      "com.combat.CombatMod"
+    ]
+  },
+  "mixins": ["combat.mixins.json", "chillzone-combat.mixins.json"],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "26.2",
+    "fabric-api": "*"
+  }
+}
