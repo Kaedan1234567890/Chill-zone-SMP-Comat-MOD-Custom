@@ -86,3 +86,7 @@ project does not expose a `remapJar` task. The final fork manifest remains in th
 - Added automatic rank/perk summaries on join and whenever a player's rank changes, so normal players can understand their own perk without gaining access to admin commands.
 - `/pvprank` remains guarded at the root command by the exact server-OP check; every `/pvprank` child therefore remains OP/server-console only.
 - The existing Combat `Top 3 Rank Effects` GUI toggle currently acts as the global rank-abilities/effects toggle for these Chill Zone perks.
+
+## 1.2.1 runtime fix
+- Fixed Minecraft 26.2 startup crash from `PlayerExhaustionMixin` targeting the removed `checkMovementStatistics` method.
+- Rank #8's 15% sprint-exhaustion perk now hooks `Player.causeFoodExhaustion(float)` and only modifies sprint/sprint-jump exhaustion while sprinting.
