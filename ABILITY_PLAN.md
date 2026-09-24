@@ -1,6 +1,4 @@
-# Chill Zone PvP Rank Ability Plan
-
-This is the current balance target. Phase 1 establishes the fork, Top-10 data/admin system, rank-gap behavior, and 10.5-to-15-heart progression. The active ability engine is the next implementation pass.
+# Chill Zone PvP Rank Ability Plan — implemented target
 
 ## Health progression
 
@@ -17,25 +15,29 @@ This is the current balance target. Phase 1 establishes the fork, Top-10 data/ad
 | #2 | 14.5 |
 | #1 | 15.0 |
 
-## Current perk targets
+## Permanent Top-3 effects
+
+- **#3:** permanent Fire Resistance.
+- **#2:** permanent Fire Resistance + Speed I.
+- **#1:** permanent Fire Resistance + Speed II.
+
+These use short server-refreshed effect instances so they naturally disappear after losing the rank or disabling rank effects, without aggressively deleting unrelated potion effects.
+
+## Rank perks / featured abilities
 
 - **#10:** PvP kill -> Speed I for 5 seconds. 30-second cooldown.
 - **#9:** 10% less fall damage.
-- **#8:** 15% less hunger/exhaustion caused specifically by sprinting.
+- **#8:** 15% less sprint movement exhaustion/hunger.
 - **#7:** 5% knockback resistance.
 - **#6:** PvP kill -> restore 2 hearts. 30-second cooldown.
 - **#5:** below 40% health -> Speed I + 3 absorption hearts for 10 seconds. 30-second cooldown.
-- **#4:** first significant PvP hit -> 15% less damage. 30-second cooldown. Also, below 50% health -> 5 absorption hearts for 10 seconds. Initial test cooldown: 45 seconds.
+- **#4:** significant PvP hit -> 15% damage refund. 30-second cooldown. Also, below 50% health -> 5 absorption hearts for 10 seconds. 45-second cooldown.
 - **#3:** PvP kill -> restore 2 hearts + 5 absorption hearts for 10 seconds. 30-second cooldown.
 - **#2:** below 25% health -> Speed I + Resistance I for 10 seconds. 45-second cooldown.
-- **#1:** below 35% health -> Speed II + Resistance I for 10 seconds. 60-second cooldown. Separately, a PvP kill restores 5 hearts with a 30-second cooldown.
+- **#1:** below 35% health -> Speed II + Resistance I for 10 seconds. 60-second cooldown. Separately, PvP kill -> restore 5 hearts. 30-second cooldown.
 
-## Safeguards planned with the ability engine
+Lower passive unlocks carry upward. Same-family kill-heal upgrades replace the weaker heal so #1 does not stack every heal tier at once.
 
-- Only genuine player-vs-player kills trigger kill rewards.
-- Cooldowns do not reset by logging out/rejoining.
-- Low-health abilities trigger once per cooldown rather than every tick below the threshold.
-- Temporary absorption cannot be infinitely stacked/refreshed.
-- Same-player/alt farming protection can be added once the base ability engine is working.
-- Rank changes update health/perks immediately.
-- Combat's existing GUI `Top 3 Rank Effects` switch will be renamed/reworked into the global Chill Zone rank-abilities switch while keeping the existing GUI layout.
+## Player visibility / explanation
+
+A ranked player gets a concise PvP-rank summary on join and whenever their rank changes. It includes max hearts, permanent Top-3 effects (if applicable), and the featured custom ability for that rank. This does not add a public admin command; `/pvprank` remains OP/server-console only.

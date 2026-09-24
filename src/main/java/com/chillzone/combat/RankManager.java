@@ -181,6 +181,7 @@ public final class RankManager {
             }
             updateNametag(killer);
             updateNametag(victim);
+            RankAbilities.onPvPKill(killer);
             return;
         }
 
@@ -192,6 +193,7 @@ public final class RankManager {
                 DataManager.save();
                 killer.sendSystemMessage(Component.literal("You received Rank #" + open + "!").withStyle(ChatFormatting.GOLD));
                 updateNametag(killer);
+                RankAbilities.onPvPKill(killer);
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.combat.mixin;
 
+import com.chillzone.combat.RankAbilities;
 import com.combat.CombatMod;
 import com.combat.ConfigManager;
 import com.combat.DataManager;
@@ -108,6 +109,9 @@ public class LivingEntityMixin {
                 removeHealthModifier(player, maxHealth);
             }
         }
+
+        // Chill Zone ability/permanent-effect engine.
+        RankAbilities.tickPlayer(player);
 
         if (!ConfigManager.getConfig().allowElytraInCombat && inCombat) {
             ItemStack chest = player.getItemBySlot(EquipmentSlot.CHEST);

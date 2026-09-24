@@ -77,3 +77,12 @@ workflow now builds `forkJar` from `sourceSets.main.output` plus the original
 MIT Combat 1.0.0 JAR. This is required because the current Loom/Minecraft 26.2
 project does not expose a `remapJar` task. The final fork manifest remains in the
 `official` mapping namespace, matching the original Combat JAR.
+
+## Ability pass 1.2.0
+
+- Added permanent Top-3 effects: #3 Fire Resistance, #2 Fire Resistance + Speed I, #1 Fire Resistance + Speed II.
+- Added the Chill Zone rank ability engine and cooldown tracking for kill rewards and low-health abilities.
+- Added passive fall-damage and knockback-resistance modifiers and sprint-exhaustion reduction.
+- Added automatic rank/perk summaries on join and whenever a player's rank changes, so normal players can understand their own perk without gaining access to admin commands.
+- `/pvprank` remains guarded at the root command by the exact server-OP check; every `/pvprank` child therefore remains OP/server-console only.
+- The existing Combat `Top 3 Rank Effects` GUI toggle currently acts as the global rank-abilities/effects toggle for these Chill Zone perks.

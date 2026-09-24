@@ -4,7 +4,8 @@
   "package": "com.chillzone.combat.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
-    "CombatModRankMixin"
+    "CombatModRankMixin",
+    "PlayerExhaustionMixin"
   ],
   "injectors": {
     "defaultRequire": 1
