@@ -68,3 +68,12 @@ When testing the fork later, remove both the old standalone Combat JAR and the o
 
 - Fixed Gradle 9/Loom task-realization recursion in the custom `forkJar` task by making the `remapJar` archive lookup lazy.
 - No gameplay/rank behavior was changed in this fix.
+
+
+## FIX2 BUILD NOTE
+
+FIX2 removes the Phase 1 build's dependency on a Loom `remapJar` task. The GitHub
+workflow now builds `forkJar` from `sourceSets.main.output` plus the original
+MIT Combat 1.0.0 JAR. This is required because the current Loom/Minecraft 26.2
+project does not expose a `remapJar` task. The final fork manifest remains in the
+`official` mapping namespace, matching the original Combat JAR.
