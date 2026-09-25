@@ -28,14 +28,18 @@ public final class ChillZoneCombatExtension implements ModInitializer {
     private static final ExclusionStore EXCLUSIONS = new ExclusionStore();
     private static final NametagSettings NAMETAGS = new NametagSettings();
     private static final RankBackupStore RANK_BACKUP = new RankBackupStore();
+    private static final KnownPlayerStore KNOWN_PLAYERS = new KnownPlayerStore();
     private static int housekeepingTicks;
+    private static int persistenceTicks;
 
     private static final SuggestionProvider<CommandSourceStack> REMEMBERED_PLAYERS = (ctx, builder) -> {
+        String typed = builder.getRemaining();
         Set<String> names = new LinkedHashSet<>();
         for (ServerPlayer player : ctx.getSource().getServer().getPlayerList().getPlayers()) {
-            names.add(player.getGameProfile().name());
+            String name = player.getGameProfile().name();
+            if (name.regionMatches(true, 0, typed, 0, typed.length())) names.add(name);
         }
-        names.addAll(RankManager.rememberedNames());
+        names.addAll(KNOWN_PLAYERS.namesStartingWith(typed));
         for (String name : names) builder.suggest(name);
         return builder.buildFuture();
     };
@@ -45,7 +49,13 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         EXCLUSIONS.load();
         NAMETAGS.load();
         RANK_BACKUP.load();
-        RankManager.initialize(EXCLUSIONS, NAMETAGS);
+        KNOWN_PLAYERS.loadLocal();
+        RankManager.initialize(EXCLUSIONS, NAMETAGS, RANK_BACKUP);
+
+        // Registered before the original Combat entrypoint. This lets us restore
+        // missing/corrupt config/combat files before Combat loads them.
+        ServerLifecycleEvents.SERVER_STARTING.register(server ->
+                CombatPersistence.restoreBeforeOriginalLoad());
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("pvprank")
@@ -89,31 +99,52 @@ public final class ChillZoneCombatExtension implements ModInitializer {
                 ));
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            // Existing Combat data is the first choice. If it is empty, recover
-            // from this fork's backup (or the old PvP Rank Admin backup migrated
-            // by RankBackupStore).
+            KNOWN_PLAYERS.bootstrapAfterCombatLoad(server);
+
+            // ranks-backup.json is the authoritative safety copy. Rank changes now
+            // update it immediately, so a reset/defaulted combat_data.json must not
+            // silently replace a known-good Top 10 on startup.
             var live = RankManager.snapshotTop10();
-            if (live.isEmpty() && RANK_BACKUP.hasRanks()) {
-                RankManager.restoreTop10(RANK_BACKUP.snapshot());
-                System.out.println("[ChillZoneCombat] Restored the saved Top 10 ranking list.");
-            } else {
+            var saved = RANK_BACKUP.snapshot();
+            if (RANK_BACKUP.hasRanks() && !live.equals(saved)) {
+                RankManager.restoreTop10(saved);
+                System.out.println("[ChillZoneCombat] Restored the protected Top 10 ranking list.");
+            } else if (!RANK_BACKUP.hasSnapshot() || (!live.isEmpty() && !RANK_BACKUP.hasRanks())) {
                 RANK_BACKUP.replace(live);
             }
+
             RankManager.enforceExclusions();
             RankManager.refreshNametags(server);
+            CombatPersistence.flushAndSnapshot();
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            if (++housekeepingTicks < 20) return;
-            housekeepingTicks = 0;
-            boolean changed = RankManager.enforceExclusions();
-            RankManager.refreshNametags(server);
-            RANK_BACKUP.replace(RankManager.snapshotTop10());
-            if (changed) RankManager.refreshNametags(server);
+            // Fast housekeeping: nametags and exclusions.
+            if (++housekeepingTicks >= 20) {
+                housekeepingTicks = 0;
+                boolean changed = RankManager.enforceExclusions();
+                KNOWN_PLAYERS.rememberOnline(server);
+                RankManager.refreshNametags(server);
+                if (changed) RankManager.refreshNametags(server);
+            }
+
+            // Every five seconds, force the original Combat config/data managers
+            // to disk and update atomic safety copies. This protects GUI settings
+            // even if a host restarts shortly after a menu change.
+            if (++persistenceTicks >= 100) {
+                persistenceTicks = 0;
+                CombatPersistence.flushAndSnapshot();
+                // Capture legitimate runtime changes made through the original
+                // Combat ranked GUI as well as Chill Zone commands/kill swaps.
+                RANK_BACKUP.replace(RankManager.snapshotTop10());
+            }
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server ->
-                RANK_BACKUP.replace(RankManager.snapshotTop10()));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            KNOWN_PLAYERS.rememberOnline(server);
+            RANK_BACKUP.replace(RankManager.snapshotTop10());
+            CombatPersistence.flushAndSnapshot();
+        });
     }
 
     private static Optional<RankManager.KnownPlayer> resolve(CommandSourceStack source, String name) {
@@ -122,6 +153,8 @@ public final class ChillZoneCombatExtension implements ModInitializer {
                 return Optional.of(new RankManager.KnownPlayer(player.getUUID(), player.getGameProfile().name()));
             }
         }
+        Optional<RankManager.KnownPlayer> remembered = KNOWN_PLAYERS.findByName(name);
+        if (remembered.isPresent()) return remembered;
         return RankManager.findByName(name);
     }
 

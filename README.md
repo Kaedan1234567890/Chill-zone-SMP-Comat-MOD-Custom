@@ -90,3 +90,17 @@ project does not expose a `remapJar` task. The final fork manifest remains in th
 ## 1.2.1 runtime fix
 - Fixed Minecraft 26.2 startup crash from `PlayerExhaustionMixin` targeting the removed `checkMovementStatistics` method.
 - Rank #8's 15% sprint-exhaustion perk now hooks `Player.causeFoodExhaustion(float)` and only modifies sprint/sprint-jump exhaustion while sprinting.
+
+
+## 1.2.2 persistence + /baltop player import
+
+- Adds a persistent Chill Zone player registry at `config/chillzone-combat/known-players.json`.
+- Automatically imports UUID + last-known-name entries from the Homes/Shard `/baltop` data file `config/chill-zone-shards.json`, plus vanilla `usercache.json`, Combat history, and online players.
+- `/pvprank set/take/remove/reset/swap` autocomplete now filters from that remembered server-player list as you type, so staff can rank previous players without waiting for them to rejoin.
+- Adds protected persistence copies for `config/combat/combat_config.json` and `config/combat/combat_data.json` under `config/chillzone-combat/persistent-backup/`. Missing/empty/corrupt primary files are restored before the original Combat mod loads.
+- Forces Combat config/player data to disk every 5 seconds and again on shutdown, protecting settings changed through `/combat menu`.
+- The protected Top 10 backup is restored on startup if live Combat rank data disagrees with the saved protected ranking list. Legitimate runtime rank changes are copied back to the protected Top 10 backup.
+- Rank mutations now save the live Combat data and protected Top 10 backup together.
+- No hard-coded player ranks are included in this source. Restore the intended old Top 10 using `/pvprank set` (the imported `/baltop` names are immediately available) or apply a later one-time restore from the old-rank screenshot.
+
+Normal server restarts and JAR updates should preserve these files as long as the server's `config` directory itself is retained.

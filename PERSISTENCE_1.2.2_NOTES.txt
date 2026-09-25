@@ -1,0 +1,7 @@
+Chill Zone Combat 1.2.2
+
+- Imports remembered players from config/chill-zone-shards.json (/baltop Homes/Shard list).
+- Keeps its own UUID/name registry in config/chillzone-combat/known-players.json.
+- Adds pre-load recovery + periodic atomic backups for Combat settings and player/rank data.
+- Top 10 protected backup is no longer blindly replaced before startup recovery.
+- No current/accidental Top 10 is hard-coded into this source.

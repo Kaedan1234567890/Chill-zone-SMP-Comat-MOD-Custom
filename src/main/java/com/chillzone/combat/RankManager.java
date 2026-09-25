@@ -26,12 +26,14 @@ public final class RankManager {
 
     private static ExclusionStore exclusions;
     private static NametagSettings nametagSettings;
+    private static RankBackupStore rankBackup;
 
     private RankManager() {}
 
-    static void initialize(ExclusionStore exclusionStore, NametagSettings settings) {
+    static void initialize(ExclusionStore exclusionStore, NametagSettings settings, RankBackupStore backup) {
         exclusions = exclusionStore;
         nametagSettings = settings;
+        rankBackup = backup;
     }
 
     public static boolean isExcluded(UUID id) {
@@ -60,7 +62,7 @@ public final class RankManager {
                 changed = true;
             }
         }
-        if (changed) DataManager.save();
+        if (changed) persistRankState();
         return changed;
     }
 
@@ -112,7 +114,7 @@ public final class RankManager {
                 setPosition(data, rank.position);
             }
         }
-        DataManager.save();
+        persistRankState();
     }
 
     /** Replacement for CombatMod.assignRankIfUnranked. Never creates Rank #11+. */
@@ -127,7 +129,7 @@ public final class RankManager {
         if (isExcluded(id)) {
             if (data.rankPosition != -1) {
                 setPosition(data, -1);
-                DataManager.save();
+                persistRankState();
             }
             updateNametag(player);
             return;
@@ -136,13 +138,13 @@ public final class RankManager {
         int open = firstOpenRank(id);
         if (open < 1) {
             setPosition(data, -1);
-            DataManager.save();
+            persistRankState();
             updateNametag(player);
             return;
         }
 
         setPosition(data, open);
-        DataManager.save();
+        persistRankState();
         player.sendSystemMessage(Component.literal("You joined the server and received Rank #" + open + "!")
                 .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         updateNametag(player);
@@ -162,7 +164,7 @@ public final class RankManager {
 
         if (isExcluded(killer.getUUID())) {
             setPosition(killerData, -1);
-            DataManager.save();
+            persistRankState();
             updateNametag(killer);
             return;
         }
@@ -171,7 +173,7 @@ public final class RankManager {
         if (victimRank >= 1 && victimRank <= 10 && (killerRank < 1 || killerRank > victimRank)) {
             setPosition(killerData, victimRank);
             setPosition(victimData, killerRank >= 1 && killerRank <= 10 ? killerRank : -1);
-            DataManager.save();
+            persistRankState();
 
             String message = killer.getGameProfile().name() + " (now Rank #" + victimRank + ") killed "
                     + victim.getGameProfile().name() + " and took their rank!";
@@ -190,7 +192,7 @@ public final class RankManager {
             int open = firstOpenRank(killer.getUUID());
             if (open >= 1) {
                 setPosition(killerData, open);
-                DataManager.save();
+                persistRankState();
                 killer.sendSystemMessage(Component.literal("You received Rank #" + open + "!").withStyle(ChatFormatting.GOLD));
                 updateNametag(killer);
                 RankAbilities.onPvPKill(killer);
@@ -223,7 +225,7 @@ public final class RankManager {
         }
 
         setPosition(target, rank);
-        DataManager.save();
+        persistRankState();
     }
 
     /** Remove the rank WITHOUT compacting everyone below it. The slot stays open. */
@@ -232,7 +234,7 @@ public final class RankManager {
         int old = normalizePosition(data.rankPosition);
         setPosition(data, -1);
         exclusions.add(id);
-        DataManager.save();
+        persistRankState();
         return old;
     }
 
@@ -244,7 +246,7 @@ public final class RankManager {
         setPosition(data, -1);
         int open = firstOpenRank(id);
         if (open >= 1) setPosition(data, open);
-        DataManager.save();
+        persistRankState();
         return open;
     }
 
@@ -257,13 +259,13 @@ public final class RankManager {
         setPosition(second, firstPos);
         exclusions.remove(a);
         exclusions.remove(b);
-        DataManager.save();
+        persistRankState();
     }
 
     public static void clearAllRanks() {
         for (PlayerData data : DataManager.getAllPlayersData().values()) setPosition(data, -1);
         exclusions.clear();
-        DataManager.save();
+        persistRankState();
     }
 
     public static Map<Integer, KnownPlayer> rankedPlayers() {
@@ -344,4 +346,11 @@ public final class RankManager {
     public static void refreshNametags(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) updateNametag(player);
     }
+    /** Save Combat's live data and the protected Top-10 backup together. */
+    private static void persistRankState() {
+        DataManager.save();
+        if (rankBackup != null) rankBackup.replace(snapshotTop10());
+        CombatPersistence.snapshotFiles();
+    }
+
 }
