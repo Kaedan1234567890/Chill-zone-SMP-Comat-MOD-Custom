@@ -15,9 +15,8 @@ import java.nio.file.StandardCopyOption;
 /**
  * Persistence helpers for original Combat player/rank data.
  *
- * Combat SETTINGS are no longer restored from lifecycle callbacks. Version
- * 1.2.5 replaces com.combat.ConfigManager itself, so settings load/save is now
- * atomic and deterministic at the exact point Combat initializes.
+ * Player/rank-data persistence helper. Combat Settings Menu persistence is
+ * owned separately by CombatSettingsStore.
  */
 public final class CombatPersistence {
     private static Path combatDir = FabricLoader.getInstance().getConfigDir().resolve("combat");
@@ -69,7 +68,7 @@ public final class CombatPersistence {
         }
     }
 
-    /** Force current managers to disk. ConfigManager itself now writes two atomic copies. */
+    /** Force current managers to disk and protect player/rank data. */
     static synchronized void flushAndSnapshot() {
         try {
             ConfigManager.save();
@@ -90,7 +89,7 @@ public final class CombatPersistence {
         snapshotDataFile();
     }
 
-    /** Compatibility method retained for older calls; ConfigManager already owns its backup. */
+    /** Compatibility helper for callers that want to force a config save. */
     public static synchronized void snapshotConfigFile() {
         try { ConfigManager.save(); } catch (Throwable ignored) {}
     }

@@ -1,0 +1,32 @@
+Chill Zone Combat 1.2.7 - Combat Settings Menu persistence
+
+This fix specifically targets the settings shown inside the original Combat Settings Menu:
+- Inventory Limits
+- Item Cooldowns
+- Combat Log Settings
+- Ranked System settings
+- World Item Limits
+- Enchant Level Limits
+- Potion Control
+- rank health/effect settings stored in CombatConfig
+
+Changes:
+1. New config/chillzone-combat/combat-settings.json is the authoritative Chill Zone menu-settings store.
+2. It restores AFTER original Combat has initialized, directly into the live CombatConfig object used by the GUIs.
+3. The complete live CombatConfig is checked every server tick. Disk writes occur only when the JSON actually changes.
+   This catches menu code that modifies Maps/lists without calling ConfigManager.save().
+4. Any original GUI that DOES call ConfigManager.save() immediately updates the authoritative store too.
+5. Shutdown forces a final settings save.
+6. The original baseline com/combat/ConfigManager.class is explicitly excluded from the final fork JAR.
+7. The replacement ConfigManager now only owns the normal config/combat/combat_config.json and no longer competes
+   with an older timestamp/backup authority system.
+8. Rank/player-data persistence remains separate and unchanged.
+
+First-use test:
+- Start server with 1.2.7.
+- Open /pvprank menu.
+- Change one obvious Combat setting.
+- Wait about one second (normally it saves immediately; the tick watcher is a fallback).
+- Confirm config/chillzone-combat/combat-settings.json exists.
+- Restart server normally.
+- /pvprank menu should show the same setting because 1.2.7 reapplies that file after Combat initializes.

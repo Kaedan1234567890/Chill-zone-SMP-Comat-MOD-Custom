@@ -95,6 +95,9 @@ public final class ChillZoneCombatExtension implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             KNOWN_PLAYERS.bootstrapAfterCombatLoad(server);
+            // Restore the exact settings used by the Combat Settings Menu only AFTER
+            // original Combat has finished its SERVER_STARTING initialization.
+            CombatSettingsStore.initializeAfterCombat(server);
 
             // ranks-backup.json is the authoritative safety copy. Rank changes now
             // update it immediately, so a reset/defaulted combat_data.json must not
@@ -114,6 +117,10 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
+            // Watch the exact live CombatConfig object used by every settings GUI.
+            // This catches GUI paths that mutate a map/list without calling save().
+            CombatSettingsStore.captureIfChanged();
+
             // Fast housekeeping: nametags and exclusions.
             if (++housekeepingTicks >= 20) {
                 housekeepingTicks = 0;
@@ -137,6 +144,7 @@ public final class ChillZoneCombatExtension implements ModInitializer {
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             KNOWN_PLAYERS.rememberOnline(server);
+            CombatSettingsStore.forceSave();
             // Do not replace the protected Top 10 during shutdown. If live
             // Combat data was reset/corrupted, shutdown must not bless that bad
             // state as the new backup. Intentional rank mutations save it already.

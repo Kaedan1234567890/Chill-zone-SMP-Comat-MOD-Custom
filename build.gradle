@@ -69,6 +69,8 @@ tasks.register('forkJar', Jar) {
         exclude 'META-INF/MANIFEST.MF'
         // Phase 1 replaces the old 20-heart / permanent potion-effect mixin.
         exclude 'com/combat/mixin/LivingEntityMixin.class'
+        // We own ConfigManager now. Never allow the original class into the final JAR.
+        exclude 'com/combat/ConfigManager.class'
     }
 
     manifest {
