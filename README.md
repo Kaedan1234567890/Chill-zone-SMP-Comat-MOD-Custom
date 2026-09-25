@@ -126,3 +126,7 @@ Normal server restarts and JAR updates should preserve these files as long as th
 - On startup, the newest valid copy wins and both files are immediately synchronized.
 - Removes the old ConfigManager persistence mixin so there is only one settings persistence owner.
 - Moves Combat player-data pre-load restoration directly into `DataManager.init(File)` via a mixin, eliminating lifecycle-order dependence for that file too.
+
+
+## 1.2.6 persistence correction
+Protected Combat settings/player-data backups are authoritative once created; reset/default live files can no longer win by timestamp or overwrite the protected Top 10 during periodic/shutdown snapshots.

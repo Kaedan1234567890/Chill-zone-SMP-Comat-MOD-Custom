@@ -54,14 +54,15 @@ public final class CombatPersistence {
             Files.createDirectories(combatDir);
             Files.createDirectories(safeDir);
 
-            // Only recover from backup when the primary is missing/corrupt.
-            // The dedicated Top-10 backup remains the authority for rank slots.
-            if (!isValidJson(data) && isValidJson(dataBackup)) {
+            // Once the protected player-data backup exists, it is authoritative.
+            // A freshly regenerated/default combat_data.json is still valid JSON,
+            // so validity alone cannot be used to decide which copy wins.
+            if (isValidJson(dataBackup)) {
                 atomicCopy(dataBackup, data);
-                System.out.println("[ChillZoneCombat] Restored protected Combat player-data backup.");
-            } else if (isValidJson(data) && !isValidJson(dataBackup)) {
+                System.out.println("[ChillZoneCombat] Restored authoritative Combat player-data backup before load.");
+            } else if (isValidJson(data)) {
                 atomicCopy(data, dataBackup);
-                System.out.println("[ChillZoneCombat] Created initial protected Combat player-data backup.");
+                System.out.println("[ChillZoneCombat] Seeded protected Combat player-data backup from existing data.");
             }
         } catch (Exception e) {
             System.err.println("[ChillZoneCombat] Player-data pre-load check failed: " + e.getMessage());

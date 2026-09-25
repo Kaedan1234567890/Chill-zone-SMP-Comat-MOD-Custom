@@ -129,15 +129,17 @@ public final class ChillZoneCombatExtension implements ModInitializer {
             if (++persistenceTicks >= 100) {
                 persistenceTicks = 0;
                 CombatPersistence.flushAndSnapshot();
-                // Capture legitimate runtime changes made through the original
-                // Combat ranked GUI as well as Chill Zone commands/kill swaps.
-                RANK_BACKUP.replace(RankManager.snapshotTop10());
+                // Do NOT overwrite ranks-backup.json from a periodic snapshot.
+                // The protected Top 10 is updated only by intentional rank
+                // mutations, so a reset/defaulted live DataManager cannot erase it.
             }
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             KNOWN_PLAYERS.rememberOnline(server);
-            RANK_BACKUP.replace(RankManager.snapshotTop10());
+            // Do not replace the protected Top 10 during shutdown. If live
+            // Combat data was reset/corrupted, shutdown must not bless that bad
+            // state as the new backup. Intentional rank mutations save it already.
             CombatPersistence.flushAndSnapshot();
         });
     }

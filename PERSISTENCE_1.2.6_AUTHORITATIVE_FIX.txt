@@ -1,0 +1,17 @@
+Chill Zone Combat 1.2.6 authoritative persistence fix
+
+Root causes found in 1.2.5:
+1. Settings load used "newest valid file wins". A freshly regenerated default
+   combat_config.json could therefore be newer than the real protected backup
+   and overwrite the real settings.
+2. Player-data restore only used the backup when the primary was invalid. A
+   freshly regenerated default combat_data.json is valid JSON, so it could win.
+3. The periodic/shutdown Top-10 snapshot could overwrite ranks-backup.json with
+   a bad/reset live ranking state.
+
+1.2.6 changes:
+- Protected settings backup is authoritative once it exists. No timestamp race.
+- Every settings save writes protected backup first, then normal Combat config.
+- Protected player-data backup is authoritative before DataManager.init loads.
+- Periodic/shutdown code no longer overwrites the protected Top-10 snapshot.
+- Intentional rank mutations still update ranks-backup.json immediately.
