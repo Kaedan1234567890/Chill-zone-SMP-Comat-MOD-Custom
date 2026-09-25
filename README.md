@@ -104,3 +104,10 @@ project does not expose a `remapJar` task. The final fork manifest remains in th
 - No hard-coded player ranks are included in this source. Restore the intended old Top 10 using `/pvprank set` (the imported `/baltop` names are immediately available) or apply a later one-time restore from the old-rank screenshot.
 
 Normal server restarts and JAR updates should preserve these files as long as the server's `config` directory itself is retained.
+
+
+## 1.2.3 command cleanup
+- The original `/combat` command tree is disabled.
+- Use `/pvprank` for Chill Zone rank administration.
+- `/pvprank menu` opens the main Combat settings GUI.
+- Persistence + `/baltop` remembered-player import from 1.2.2 remain unchanged.

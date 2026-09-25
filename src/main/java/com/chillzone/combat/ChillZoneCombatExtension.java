@@ -1,6 +1,6 @@
 package com.chillzone.combat;
 
-import com.combat.gui.RankedGui;
+import com.combat.gui.CombatMenuGui;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
@@ -161,10 +161,10 @@ public final class ChillZoneCombatExtension implements ModInitializer {
     private static int openMenu(CommandSourceStack source) {
         try {
             ServerPlayer player = source.getPlayerOrException();
-            new RankedGui(player).open();
+            new CombatMenuGui(player).open();
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.literal("The Combat rank menu can only be opened by an in-game OP."));
+            source.sendFailure(Component.literal("The Combat settings menu can only be opened by an in-game OP."));
             return 0;
         }
     }

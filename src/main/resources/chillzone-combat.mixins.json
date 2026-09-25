@@ -4,6 +4,7 @@
   "package": "com.chillzone.combat.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "CombatCommandMixin",
     "CombatModRankMixin",
     "PlayerExhaustionMixin"
   ],

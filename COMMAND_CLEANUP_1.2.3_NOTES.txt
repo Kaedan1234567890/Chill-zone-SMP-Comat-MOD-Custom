@@ -1,0 +1,13 @@
+Chill Zone Combat 1.2.3 - command cleanup
+
+Changes from 1.2.2:
+- Removes the original Combat /combat command tree entirely.
+  - /combat rank removed
+  - /combat top removed
+  - /combat menu removed
+- Keeps the original Combat gameplay/config/data systems loaded; only the old command registration is suppressed.
+- /pvprank menu now opens the main Combat settings menu (CombatMenuGui) instead of the ranked player-head menu.
+- All Chill Zone /pvprank administration commands remain.
+- Keeps 1.2.2 persistence protection, ranks backup, known-players.json, and /baltop player import.
+
+No rank/config reset or migration is intentionally performed by this update.
