@@ -1,0 +1,30 @@
+Chill Zone Combat 1.2.5 - direct settings persistence fix
+
+Why 1.2.4 could still reset:
+- 1.2.4 tried to repair/restore the original Combat config around its lifecycle callback.
+- That still depended on callback/load timing and on a second backup-copy layer.
+- If the wrong copy was loaded first, a perfectly valid default configuration could still become the live in-memory settings.
+
+What 1.2.5 changes:
+1. Replaces com.combat.ConfigManager itself with Chill Zone-owned source.
+2. Combat settings are loaded at the exact ConfigManager.init() point; no lifecycle race.
+3. Every ConfigManager.save() atomically writes BOTH the normal Combat config and the protected backup.
+4. Startup reads both copies, chooses the newest valid copy, and immediately synchronizes both.
+5. A damaged/missing copy can heal from the other copy.
+6. The old ConfigManager save mixin is removed; there is no duplicate/competing config persistence layer.
+7. Combat player-data restoration is also moved to the exact HEAD of DataManager.init(File), removing lifecycle ordering there too.
+
+Files:
+- config/combat/combat_config.json
+- config/chillzone-combat/persistent-backup/combat_config.json
+- config/combat/combat_data.json
+- config/chillzone-combat/persistent-backup/combat_data.json
+- config/chillzone-combat/ranks-backup.json
+
+Test:
+- Start server with 1.2.5.
+- Open /pvprank menu.
+- Change obvious settings (for example Ranked System or Top 3 Rank Effects).
+- Close menu and wait a second.
+- Restart normally.
+- Re-open /pvprank menu and verify exact values remain.

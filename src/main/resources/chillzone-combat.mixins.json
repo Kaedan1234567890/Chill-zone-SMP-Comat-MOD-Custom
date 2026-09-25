@@ -7,7 +7,7 @@
     "CombatCommandMixin",
     "CombatModRankMixin",
     "PlayerExhaustionMixin",
-    "ConfigManagerPersistenceMixin",
+    "DataManagerInitPersistenceMixin",
     "DataManagerPersistenceMixin"
   ],
   "injectors": {

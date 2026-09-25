@@ -119,3 +119,10 @@ Normal server restarts and JAR updates should preserve these files as long as th
 - Adds save hooks so every original `ConfigManager.save()` immediately refreshes the protected settings copy.
 - Adds the same immediate protection for original `DataManager.save()` calls.
 - Keeps the 5-second autosave, shutdown save, protected Top 10, `/baltop` remembered-player import, removed `/combat` tree, and `/pvprank menu` Combat settings GUI from 1.2.3.
+
+## 1.2.5 direct settings persistence fix
+- Replaces the original `com.combat.ConfigManager` with Chill Zone-owned source instead of trying to repair its load order from server lifecycle callbacks.
+- Every settings save atomically writes both `config/combat/combat_config.json` and `config/chillzone-combat/persistent-backup/combat_config.json`.
+- On startup, the newest valid copy wins and both files are immediately synchronized.
+- Removes the old ConfigManager persistence mixin so there is only one settings persistence owner.
+- Moves Combat player-data pre-load restoration directly into `DataManager.init(File)` via a mixin, eliminating lifecycle-order dependence for that file too.

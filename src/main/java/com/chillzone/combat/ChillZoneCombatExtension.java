@@ -52,11 +52,6 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         KNOWN_PLAYERS.loadLocal();
         RankManager.initialize(EXCLUSIONS, NAMETAGS, RANK_BACKUP);
 
-        // Registered before the original Combat entrypoint. This lets us restore
-        // protected config/combat files before Combat loads them.
-        ServerLifecycleEvents.SERVER_STARTING.register(server ->
-                CombatPersistence.restoreBeforeOriginalLoad(server));
-
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("pvprank")
                         .requires(Permissions::canAdmin)
