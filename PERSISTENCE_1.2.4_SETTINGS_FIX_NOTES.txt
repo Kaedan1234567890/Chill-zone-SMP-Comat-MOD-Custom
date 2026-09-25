@@ -1,0 +1,20 @@
+Chill Zone Combat 1.2.4 - settings persistence fix
+
+Root cause fixed:
+- 1.2.2/1.2.3 only restored the protected combat_config.json when the live file
+  was missing/empty/corrupt.
+- A server/host restart could recreate a VALID default combat_config.json.
+- Because it was valid JSON, the old logic accepted it and later overwrote the
+  protected backup with those default settings.
+
+1.2.4 behavior:
+- Uses the same server-directory config/combat path as original Combat.
+- Once persistent-backup/combat_config.json exists, it is authoritative during
+  startup and is copied into config/combat BEFORE original Combat loads it.
+- Every original ConfigManager.save() is mirrored immediately to the protected
+  settings backup.
+- Every original DataManager.save() is mirrored immediately to the protected
+  player/rank-data backup.
+- Existing 5-second autosave + shutdown saves remain as extra protection.
+- ranks-backup.json remains the separate authoritative Top-10 safety copy.
+- /pvprank menu remains the only Combat settings command; /combat stays removed.

@@ -4,6 +4,7 @@ import com.combat.ConfigManager;
 import com.combat.DataManager;
 import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.server.MinecraftServer;
 
 import java.io.Reader;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -12,38 +13,59 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * Extra persistence safety for the original Combat config/data files.
+ * Protected persistence for the original Combat config/data files.
  *
- * The original mod writes config/combat/*.json directly. This layer keeps
- * atomic shadow copies and restores them BEFORE the original Combat entrypoint
- * loads if a primary file is missing/empty/corrupt. It also periodically calls
- * the original save methods so GUI settings cannot live only in memory.
+ * 1.2.4 fix:
+ * - Uses the exact server-directory path used by the original Combat mod.
+ * - Once a protected backup exists, that backup is authoritative on startup.
+ *   This prevents a host/mod update from replacing a valid customized config
+ *   with a different-but-still-valid default JSON file.
+ * - Original ConfigManager/DataManager saves are mirrored immediately by
+ *   mixins, so GUI changes become protected as soon as Combat writes them.
  */
-final class CombatPersistence {
-    private static final Path COMBAT_DIR = FabricLoader.getInstance().getConfigDir().resolve("combat");
-    private static final Path SAFE_DIR = FabricLoader.getInstance().getConfigDir()
+public final class CombatPersistence {
+    private static Path combatDir = FabricLoader.getInstance().getConfigDir().resolve("combat");
+    private static Path safeDir = FabricLoader.getInstance().getConfigDir()
             .resolve("chillzone-combat").resolve("persistent-backup");
 
-    private static final Path CONFIG = COMBAT_DIR.resolve("combat_config.json");
-    private static final Path DATA = COMBAT_DIR.resolve("combat_data.json");
-    private static final Path CONFIG_BACKUP = SAFE_DIR.resolve("combat_config.json");
-    private static final Path DATA_BACKUP = SAFE_DIR.resolve("combat_data.json");
+    private static Path config = combatDir.resolve("combat_config.json");
+    private static Path data = combatDir.resolve("combat_data.json");
+    private static Path configBackup = safeDir.resolve("combat_config.json");
+    private static Path dataBackup = safeDir.resolve("combat_data.json");
 
     private CombatPersistence() {}
 
-    /** Runs on SERVER_STARTING before the original Combat callback is registered/executed. */
-    static void restoreBeforeOriginalLoad() {
+    private static synchronized void configureForServer(MinecraftServer server) {
+        if (server == null) return;
+        Path root = server.getServerDirectory().toAbsolutePath().normalize();
+        combatDir = root.resolve("config").resolve("combat");
+        safeDir = root.resolve("config").resolve("chillzone-combat").resolve("persistent-backup");
+        config = combatDir.resolve("combat_config.json");
+        data = combatDir.resolve("combat_data.json");
+        configBackup = safeDir.resolve("combat_config.json");
+        dataBackup = safeDir.resolve("combat_data.json");
+    }
+
+    /**
+     * Runs from Chill Zone's SERVER_STARTING callback, which is registered
+     * before the embedded original Combat callback.
+     *
+     * A valid protected backup is authoritative. If no backup exists yet, a
+     * valid existing primary is adopted as the first protected copy.
+     */
+    static synchronized void restoreBeforeOriginalLoad(MinecraftServer server) {
+        configureForServer(server);
         try {
-            Files.createDirectories(COMBAT_DIR);
-            Files.createDirectories(SAFE_DIR);
-            restoreIfNeeded(CONFIG, CONFIG_BACKUP, "Combat settings");
-            restoreIfNeeded(DATA, DATA_BACKUP, "Combat player/rank data");
+            Files.createDirectories(combatDir);
+            Files.createDirectories(safeDir);
+            restoreAuthoritative(config, configBackup, "Combat settings");
+            restoreAuthoritative(data, dataBackup, "Combat player/rank data");
         } catch (Exception e) {
             System.err.println("[ChillZoneCombat] Persistence pre-load check failed: " + e.getMessage());
         }
     }
 
-    /** Force both original managers to disk, then keep atomic shadow copies. */
+    /** Force both original managers to disk, then keep atomic protected copies. */
     static synchronized void flushAndSnapshot() {
         try {
             ConfigManager.save();
@@ -58,25 +80,49 @@ final class CombatPersistence {
         snapshotFiles();
     }
 
-    /** Used immediately after rank mutations so the rank file's safe copy is current. */
+    /** Used immediately after rank mutations so both safe copies remain current. */
     static synchronized void snapshotFiles() {
+        snapshotConfigFile();
+        snapshotDataFile();
+    }
+
+    /** Called after the original ConfigManager.save() returns. */
+    public static synchronized void snapshotConfigFile() {
         try {
-            Files.createDirectories(SAFE_DIR);
-            copyIfValid(CONFIG, CONFIG_BACKUP);
-            copyIfValid(DATA, DATA_BACKUP);
+            Files.createDirectories(safeDir);
+            copyIfValid(config, configBackup);
         } catch (Exception e) {
-            System.err.println("[ChillZoneCombat] Could not update persistence backups: " + e.getMessage());
+            System.err.println("[ChillZoneCombat] Could not protect Combat settings: " + e.getMessage());
         }
     }
 
-    private static void restoreIfNeeded(Path primary, Path backup, String label) {
-        if (isValidJson(primary)) return;
-        if (!isValidJson(backup)) return;
+    /** Called after the original DataManager.save() returns. */
+    public static synchronized void snapshotDataFile() {
         try {
-            atomicCopy(backup, primary);
-            System.out.println("[ChillZoneCombat] Restored " + label + " from the persistent backup.");
+            Files.createDirectories(safeDir);
+            copyIfValid(data, dataBackup);
         } catch (Exception e) {
-            System.err.println("[ChillZoneCombat] Could not restore " + label + ": " + e.getMessage());
+            System.err.println("[ChillZoneCombat] Could not protect Combat player data: " + e.getMessage());
+        }
+    }
+
+    private static void restoreAuthoritative(Path primary, Path backup, String label) {
+        try {
+            if (isValidJson(backup)) {
+                // Important: restore even when the primary is valid JSON. A host
+                // can regenerate a perfectly valid default file during restart.
+                atomicCopy(backup, primary);
+                System.out.println("[ChillZoneCombat] Loaded protected " + label + " backup.");
+                return;
+            }
+
+            // First run of the protected system: adopt an existing good file.
+            if (isValidJson(primary)) {
+                atomicCopy(primary, backup);
+                System.out.println("[ChillZoneCombat] Created initial protected " + label + " backup.");
+            }
+        } catch (Exception e) {
+            System.err.println("[ChillZoneCombat] Could not prepare " + label + ": " + e.getMessage());
         }
     }
 

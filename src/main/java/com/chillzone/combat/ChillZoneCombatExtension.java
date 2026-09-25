@@ -53,9 +53,9 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         RankManager.initialize(EXCLUSIONS, NAMETAGS, RANK_BACKUP);
 
         // Registered before the original Combat entrypoint. This lets us restore
-        // missing/corrupt config/combat files before Combat loads them.
+        // protected config/combat files before Combat loads them.
         ServerLifecycleEvents.SERVER_STARTING.register(server ->
-                CombatPersistence.restoreBeforeOriginalLoad());
+                CombatPersistence.restoreBeforeOriginalLoad(server));
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("pvprank")
@@ -232,7 +232,7 @@ public final class ChillZoneCombatExtension implements ModInitializer {
     private static int status(CommandSourceStack source) {
         source.sendSystemMessage(Component.literal("PvP Rank Admin: OP-only | Nametag: "
                 + (RankManager.isCompactNametagMode() ? "COMPACT [#1]" : "FULL [Rank #1]")));
-        source.sendSystemMessage(Component.literal("Use /combat menu for Combat settings or /pvprank menu for the rank page."));
+        source.sendSystemMessage(Component.literal("Use /pvprank menu for the Combat settings menu."));
         return 1;
     }
 

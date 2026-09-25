@@ -111,3 +111,11 @@ Normal server restarts and JAR updates should preserve these files as long as th
 - Use `/pvprank` for Chill Zone rank administration.
 - `/pvprank menu` opens the main Combat settings GUI.
 - Persistence + `/baltop` remembered-player import from 1.2.2 remain unchanged.
+
+## 1.2.4 settings persistence fix
+- Fixes the persistence flaw where a newly regenerated but valid default `combat_config.json` could be accepted and then overwrite the good protected backup.
+- Once `config/chillzone-combat/persistent-backup/combat_config.json` exists, that protected copy is restored into `config/combat/combat_config.json` before original Combat loads on every server start.
+- Uses the exact server-directory paths used by original Combat instead of assuming the process working directory.
+- Adds save hooks so every original `ConfigManager.save()` immediately refreshes the protected settings copy.
+- Adds the same immediate protection for original `DataManager.save()` calls.
+- Keeps the 5-second autosave, shutdown save, protected Top 10, `/baltop` remembered-player import, removed `/combat` tree, and `/pvprank menu` Combat settings GUI from 1.2.3.

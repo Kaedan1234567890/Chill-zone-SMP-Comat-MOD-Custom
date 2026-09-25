@@ -6,7 +6,9 @@
   "mixins": [
     "CombatCommandMixin",
     "CombatModRankMixin",
-    "PlayerExhaustionMixin"
+    "PlayerExhaustionMixin",
+    "ConfigManagerPersistenceMixin",
+    "DataManagerPersistenceMixin"
   ],
   "injectors": {
     "defaultRequire": 1
