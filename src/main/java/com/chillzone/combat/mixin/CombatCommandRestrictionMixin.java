@@ -1,6 +1,7 @@
 package com.chillzone.combat.mixin;
 
 import com.chillzone.combat.CombatState;
+import com.mojang.brigadier.ParseResults;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -16,19 +17,31 @@ import java.util.Locale;
 /**
  * Central combat-command guard.
  *
- * The Combat mod is the authority for whether a player is combat-tagged, so
- * teleport/escape commands are blocked here rather than each separate mod
- * maintaining its own combat timer.
+ * IMPORTANT: player-entered commands in Minecraft 26.2 are already parsed by
+ * ServerGamePacketListenerImpl and are sent directly to Commands#performCommand.
+ * They do NOT necessarily pass through Commands#performPrefixedCommand first.
+ * Therefore this guard must intercept performCommand, otherwise /home, /spawn,
+ * etc. can bypass the restriction even while CombatState reports the player as
+ * tagged.
  */
 @Mixin(Commands.class)
 public abstract class CombatCommandRestrictionMixin {
 
-    @Inject(method = "performPrefixedCommand", at = @At("HEAD"), cancellable = true)
+    @Inject(
+            method = "performCommand(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V",
+            at = @At("HEAD"),
+            cancellable = true
+    )
     private void chillzone$blockEscapeCommandsDuringCombat(
-            CommandSourceStack source,
-            String command,
+            ParseResults<CommandSourceStack> parseResults,
+            String commandString,
             CallbackInfo ci
     ) {
+        if (parseResults == null || parseResults.getContext() == null) {
+            return;
+        }
+
+        CommandSourceStack source = parseResults.getContext().getSource();
         if (!(source.getEntity() instanceof ServerPlayer player)) {
             return;
         }
@@ -37,7 +50,7 @@ public abstract class CombatCommandRestrictionMixin {
             return;
         }
 
-        String normalized = command == null ? "" : command.trim();
+        String normalized = commandString == null ? "" : commandString.trim();
         if (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
         }
@@ -46,7 +59,12 @@ public abstract class CombatCommandRestrictionMixin {
         }
 
         String root = normalized.split("\\s+", 2)[0].toLowerCase(Locale.ROOT);
-        if (!isBlockedRoot(root)) {
+
+        // Also handle namespaced command roots, e.g. modid:home.
+        int namespaceSeparator = root.indexOf(':');
+        String bareRoot = namespaceSeparator >= 0 ? root.substring(namespaceSeparator + 1) : root;
+
+        if (!isBlockedRoot(bareRoot)) {
             return;
         }
 
@@ -54,7 +72,7 @@ public abstract class CombatCommandRestrictionMixin {
         String timeText = seconds > 0 ? " (" + seconds + "s remaining)" : "";
 
         source.sendFailure(Component.literal(
-                "You are in combat! You cannot use /" + root + " right now." + timeText
+                "You are in combat! You cannot use /" + bareRoot + " right now." + timeText
         ).withStyle(ChatFormatting.RED));
 
         ci.cancel();
@@ -63,7 +81,6 @@ public abstract class CombatCommandRestrictionMixin {
     private static boolean isBlockedRoot(String root) {
         return root.equals("spawn")
                 || root.equals("home")
-                || root.equals("homes")
                 || root.equals("rtp");
     }
 }

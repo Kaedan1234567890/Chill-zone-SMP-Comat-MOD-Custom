@@ -162,3 +162,17 @@ While a player is actively combat-tagged, the Combat mod now centrally blocks th
 The player receives a red failure message including the remaining combat time. The restriction uses the same live `CombatMod.combatTagExpiration` state as the combat timer, so it does not maintain a separate timer.
 
 This update does **not** yet add the physical Safe Zone boundary wall. That belongs in the Spawn Protection mod, which owns the region geometry. The Spawn Protection mod should query `CombatState.isInCombat(player)` before allowing a tagged player to cross into the protected region.
+
+
+## 1.3.3-alpha command-lock fix
+
+Fixes combat command blocking for player-entered commands on Minecraft 26.2.
+The previous implementation intercepted `Commands.performPrefixedCommand`, but normal player chat commands are parsed by `ServerGamePacketListenerImpl` and can go directly to `Commands.performCommand(ParseResults, String)`.
+This release intercepts the actual execution path and blocks `/spawn`, `/home`, `/homes`, and `/rtp` while the player is combat-tagged. Namespaced forms such as `modid:home` are also blocked.
+
+
+## 1.3.4-alpha command lock scope
+- Combat-tagged players are blocked from `/spawn`, `/home`, and `/rtp`.
+- `/homes` is intentionally NOT blocked because it is an admin management command on Chill Zone.
+- Namespaced variants of the blocked roots are still caught.
+- Existing ranked ability rework and spawn-protection-on-attack removal remain unchanged.
