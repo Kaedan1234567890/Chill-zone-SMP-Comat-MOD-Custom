@@ -1,5 +1,6 @@
 package com.chillzone.combat;
 
+import com.combat.CombatMod;
 import com.combat.gui.CombatMenuGui;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -8,9 +9,12 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.LinkedHashSet;
@@ -51,6 +55,27 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         RANK_BACKUP.load();
         KNOWN_PLAYERS.loadLocal();
         RankManager.initialize(EXCLUSIONS, NAMETAGS, RANK_BACKUP);
+
+        // Respawn/spawn immunity is defensive only. The instant an immune player
+        // chooses to attack another player, their protection is removed so they
+        // cannot start a fight while remaining invulnerable.
+        AttackEntityCallback.EVENT.register((player, level, hand, entity, hitResult) -> {
+            if (player instanceof ServerPlayer attacker
+                    && entity instanceof ServerPlayer victim
+                    && attacker != victim) {
+                Long immunityEnds = CombatMod.immunityExpiration.get(attacker.getUUID());
+                if (immunityEnds != null) {
+                    CombatMod.immunityExpiration.remove(attacker.getUUID());
+                    if (System.currentTimeMillis() < immunityEnds) {
+                        attacker.sendSystemMessage(
+                                Component.literal("Spawn protection removed because you attacked a player.")
+                                        .withStyle(ChatFormatting.RED),
+                                true);
+                    }
+                }
+            }
+            return InteractionResult.PASS;
+        });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 dispatcher.register(Commands.literal("pvprank")

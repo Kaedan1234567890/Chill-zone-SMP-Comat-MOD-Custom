@@ -1,3 +1,10 @@
+
+## 1.3.1-alpha combat-protection change
+- Respawn/spawn immunity is now cancelled immediately when the protected player attacks another player.
+- This prevents an immune player from initiating PvP while remaining invulnerable.
+- Added `CombatState.isInCombat(ServerPlayer)` and `remainingSeconds(...)` as the single Chill Zone combat-state API for the upcoming `/spawn`, `/home`, `/rtp`, and Safe Zone restrictions.
+- No teleport commands are blocked in this build yet; those restrictions should all use this same combat-state helper so every Chill Zone mod agrees on whether a player is combat-tagged.
+
 # Chill Zone Combat — Phase 1 fork source
 
 This is the first source pass toward replacing the separate Combat + PvP Rank Admin setup with one maintainable Chill Zone Combat mod.
@@ -130,3 +137,17 @@ Normal server restarts and JAR updates should preserve these files as long as th
 
 ## 1.2.6 persistence correction
 Protected Combat settings/player-data backups are authoritative once created; reset/default live files can no longer win by timestamp or overwrite the protected Top 10 during periodic/shutdown snapshots.
+
+## 1.3.0-alpha rank ability rework
+
+- Keeps the established #10 -> #1 health progression unchanged (10.5 -> 15 hearts).
+- Keeps the permanent Top-3 effects unchanged.
+- Reworks the rank abilities to make the Top 5 more noticeable and useful in actual PvP.
+- #1 King's Wrath: Strength II + Resistance II for 20s below 35% HP; kill heal remains 5 hearts.
+- #2 Second Wind: Speed II + Resistance II + Regeneration III for 20s below 30% HP.
+- #3 Blood Feast: kill restores 3 hearts, grants 4 absorption hearts for 15s, and Strength I for 30s.
+- #4 Revenge and #5 Berserker now use 15-second combat windows.
+- #9 fall reduction is increased to 25%; #7 knockback resistance is increased to 10%.
+- All ranked players retain a base First Blood kill-rush: Speed I + Regeneration I for 15s on the existing 30s cooldown.
+- Adds visible Top-5 particle/sound activation cues using vanilla effects only.
+- No persistence, command, Top-10, nametag, settings-menu, or combat-log behavior was intentionally changed in this pass.
