@@ -151,3 +151,14 @@ Protected Combat settings/player-data backups are authoritative once created; re
 - All ranked players retain a base First Blood kill-rush: Speed I + Regeneration I for 15s on the existing 30s cooldown.
 - Adds visible Top-5 particle/sound activation cues using vanilla effects only.
 - No persistence, command, Top-10, nametag, settings-menu, or combat-log behavior was intentionally changed in this pass.
+
+## 1.3.2-alpha combat command lock
+While a player is actively combat-tagged, the Combat mod now centrally blocks these escape/teleport command roots:
+- `/spawn`
+- `/home`
+- `/homes`
+- `/rtp`
+
+The player receives a red failure message including the remaining combat time. The restriction uses the same live `CombatMod.combatTagExpiration` state as the combat timer, so it does not maintain a separate timer.
+
+This update does **not** yet add the physical Safe Zone boundary wall. That belongs in the Spawn Protection mod, which owns the region geometry. The Spawn Protection mod should query `CombatState.isInCombat(player)` before allowing a tagged player to cross into the protected region.
