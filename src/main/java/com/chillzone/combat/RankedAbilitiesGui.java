@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.item.component.ItemLore;
 
 import java.util.ArrayList;
@@ -153,15 +152,15 @@ public final class RankedAbilitiesGui extends ChestGui {
         String label;
         ChatFormatting color;
         if (active) {
-            stack = new ItemStack(Blocks.LIME_STAINED_GLASS_PANE.asItem());
+            stack = new ItemStack(Items.EMERALD);
             label = "EQUIPPED";
             color = ChatFormatting.GREEN;
         } else if (unlocked && equipped.size() < slots) {
-            stack = new ItemStack(Blocks.YELLOW_STAINED_GLASS_PANE.asItem());
+            stack = new ItemStack(Items.GOLD_INGOT);
             label = "AVAILABLE";
             color = ChatFormatting.YELLOW;
         } else {
-            stack = new ItemStack(Blocks.RED_STAINED_GLASS_PANE.asItem());
+            stack = new ItemStack(Items.REDSTONE);
             label = unlocked ? "NO FREE SLOTS" : "LOCKED";
             color = ChatFormatting.RED;
         }
