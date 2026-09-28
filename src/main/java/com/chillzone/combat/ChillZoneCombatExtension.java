@@ -54,6 +54,7 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         NAMETAGS.load();
         RANK_BACKUP.load();
         KNOWN_PLAYERS.loadLocal();
+        AbilityLoadoutStore.load();
         RankManager.initialize(EXCLUSIONS, NAMETAGS, RANK_BACKUP);
 
         // Respawn/spawn immunity is defensive only. The instant an immune player
@@ -77,7 +78,7 @@ public final class ChillZoneCombatExtension implements ModInitializer {
             return InteractionResult.PASS;
         });
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
                 dispatcher.register(Commands.literal("pvprank")
                         .requires(Permissions::canAdmin)
                         .executes(ctx -> status(ctx.getSource()))
@@ -116,7 +117,17 @@ public final class ChillZoneCombatExtension implements ModInitializer {
                                 .then(Commands.literal("full").executes(ctx -> setNametag(ctx.getSource(), false))))
                         .then(Commands.literal("resetall")
                                 .then(Commands.literal("confirm").executes(ctx -> resetAll(ctx.getSource()))))
-                ));
+                );
+
+                // Player-facing ability menu. Everyone may open it; unranked
+                // players can browse but cannot equip anything.
+                dispatcher.register(Commands.literal("ranked")
+                        .executes(ctx -> openAbilities(ctx.getSource()))
+                        .then(Commands.literal("ability")
+                                .executes(ctx -> openAbilities(ctx.getSource())))
+                        .then(Commands.literal("abilities")
+                                .executes(ctx -> openAbilities(ctx.getSource()))));
+        });
 
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             KNOWN_PLAYERS.bootstrapAfterCombatLoad(server);
@@ -170,6 +181,7 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             KNOWN_PLAYERS.rememberOnline(server);
             CombatSettingsStore.forceSave();
+            AbilityLoadoutStore.save();
             // Do not replace the protected Top 10 during shutdown. If live
             // Combat data was reset/corrupted, shutdown must not bless that bad
             // state as the new backup. Intentional rank mutations save it already.
@@ -186,6 +198,17 @@ public final class ChillZoneCombatExtension implements ModInitializer {
         Optional<RankManager.KnownPlayer> remembered = KNOWN_PLAYERS.findByName(name);
         if (remembered.isPresent()) return remembered;
         return RankManager.findByName(name);
+    }
+
+    private static int openAbilities(CommandSourceStack source) {
+        try {
+            ServerPlayer player = source.getPlayerOrException();
+            new RankedAbilitiesGui(player, 0).open();
+            return 1;
+        } catch (Exception e) {
+            source.sendFailure(Component.literal("The ranked ability menu can only be opened by a player."));
+            return 0;
+        }
     }
 
     private static int openMenu(CommandSourceStack source) {

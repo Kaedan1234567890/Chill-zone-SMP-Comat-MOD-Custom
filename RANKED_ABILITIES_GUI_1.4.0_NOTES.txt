@@ -1,0 +1,25 @@
+Chill Zone Combat 1.4.0-alpha-ranked-abilities-gui
+
+Prototype goal:
+Turn the fixed rank perk layer into player-selectable loadouts while preserving:
+- automatic rank health,
+- automatic Top-3 permanent Fire Resistance/Speed effects,
+- existing PvP ranking/persistence/admin systems,
+- combat command restrictions from 1.3.4,
+- respawn protection removal when the protected player starts PvP.
+
+Commands:
+/ranked
+/ranked ability
+/ranked abilities
+
+All players may open the menu. Unranked players are browse-only.
+
+Slots:
+#10-#6 = 1
+#5-#4 = 2
+#3-#2 = 3
+#1 = 4
+
+This is intentionally an alpha prototype. GitHub Actions is still the authoritative
+26.2 compile test before installing it on the live server.

@@ -18,10 +18,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/** Chill Zone rank perks/abilities. All timers are server-time millis and survive relogs. */
+/**
+ * Chill Zone selectable rank ability engine.
+ * Rank health remains automatic elsewhere. Top-3 permanent effects also remain
+ * automatic; this class only makes the configurable perk layer player-selectable.
+ */
 public final class RankAbilities {
-    private static final Identifier FALL_REDUCTION_ID = Identifier.parse("chillzone:rank_fall_reduction");
-    private static final Identifier KNOCKBACK_REDUCTION_ID = Identifier.parse("chillzone:rank_knockback_resistance");
+    private static final Identifier FALL_REDUCTION_ID = Identifier.parse("chillzone:ability_fall_reduction");
+    private static final Identifier KNOCKBACK_REDUCTION_ID = Identifier.parse("chillzone:ability_knockback_resistance");
 
     private static final Map<UUID, Map<String, Long>> COOLDOWNS = new HashMap<>();
     private static final Map<UUID, Float> LAST_HEALTH = new HashMap<>();
@@ -37,10 +41,21 @@ public final class RankAbilities {
         return ConfigManager.getConfig().rankedSystemEnabled && ConfigManager.getConfig().topRanksEffectsEnabled;
     }
 
-    public static boolean hasPerk(ServerPlayer player, int unlockRank) {
+    public static boolean hasAbility(ServerPlayer player, String abilityId) {
         if (!abilitiesEnabled()) return false;
         int rank = RankManager.getRank(player.getUUID());
-        return rank >= 1 && rank <= unlockRank;
+        AbilityDefinition definition = AbilityDefinition.byId(abilityId);
+        return definition != null
+                && definition.unlockedFor(rank)
+                && AbilityLoadoutStore.isEquipped(player.getUUID(), abilityId);
+    }
+
+    /** Compatibility helper retained for older internal callers. */
+    public static boolean hasPerk(ServerPlayer player, int unlockRank) {
+        return switch (unlockRank) {
+            case 8 -> hasAbility(player, AbilityDefinition.RUNNERS_INSTINCT.id());
+            default -> false;
+        };
     }
 
     public static void tickPlayer(ServerPlayer player) {
@@ -48,6 +63,7 @@ public final class RankAbilities {
         long now = System.currentTimeMillis();
         int rank = RankManager.getRank(id);
 
+        AbilityLoadoutStore.sanitize(id, rank);
         announceIfNeeded(player, rank, now);
         maintainAbsorption(player, now);
         updatePassiveAttributes(player, rank);
@@ -57,9 +73,13 @@ public final class RankAbilities {
             return;
         }
 
+        // These are intentionally NOT selectable. The user requested that the
+        // established Top-3 permanent effects stay tied directly to rank.
         maintainPermanentTopThreeEffects(player, rank);
-        applyGuardAfterPvPHit(player, rank, now);
-        applyLowHealthAbilities(player, rank, now);
+
+        maintainSelectablePermanentEffects(player);
+        applyGuardAfterPvPHit(player, now);
+        applyLowHealthAbilities(player, now);
         LAST_HEALTH.put(id, player.getHealth());
     }
 
@@ -68,60 +88,72 @@ public final class RankAbilities {
         if (!abilitiesEnabled()) return;
         int rank = RankManager.getRank(killer.getUUID());
         if (rank < 1 || rank > 10) return;
+        AbilityLoadoutStore.sanitize(killer.getUUID(), rank);
         long now = System.currentTimeMillis();
+        UUID id = killer.getUUID();
 
-        // #10 unlock: every ranked player keeps a noticeable kill-rush as they climb.
-        // Speed I + Regeneration I for 15 seconds, with the same 30-second family cooldown.
-        if (rank <= 10 && ready(killer.getUUID(), "kill_rush", now, 30_000L)) {
-            killer.addEffect(new MobEffectInstance(MobEffects.SPEED, 15 * 20, 0, false, false, true));
-            killer.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 15 * 20, 0, false, false, true));
+        if (hasAbility(killer, AbilityDefinition.FIRST_BLOOD.id()) && ready(id, "first_blood", now, 30_000L)) {
+            killer.addEffect(new MobEffectInstance(MobEffects.SPEED, 8 * 20, 0, false, false, true));
+            killer.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 8 * 20, 0, false, false, true));
+            cue(killer, AbilityDefinition.FIRST_BLOOD, false);
         }
-
-        // Rank #3 gets its own Blood Feast strength reward on every genuine PvP kill.
-        // This intentionally refreshes to 30 seconds instead of using the heal cooldown.
-        if (rank == 3) {
+        if (hasAbility(killer, AbilityDefinition.HUNTERS_RECOVERY.id()) && ready(id, "hunters_recovery", now, 30_000L)) {
+            killer.heal(5.0F);
+            cue(killer, AbilityDefinition.HUNTERS_RECOVERY, false);
+        }
+        if (hasAbility(killer, AbilityDefinition.ADRENALINE_RUSH.id()) && ready(id, "adrenaline_rush", now, 30_000L)) {
+            killer.addEffect(new MobEffectInstance(MobEffects.SPEED, 8 * 20, 1, false, false, true));
+            cue(killer, AbilityDefinition.ADRENALINE_RUSH, false);
+        }
+        if (hasAbility(killer, AbilityDefinition.BLOOD_FEAST.id()) && ready(id, "blood_feast", now, 30_000L)) {
+            killer.heal(6.0F);
+            grantAbsorption(killer, 8.0F, 15_000L);
             killer.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 30 * 20, 0, false, false, true));
-            visualCue(killer, 3);
+            cue(killer, AbilityDefinition.BLOOD_FEAST, true);
         }
-
-        // Kill-heal family upgrades rather than stacking duplicate lower-tier heals.
-        if (rank == 1) {
-            if (ready(killer.getUUID(), "kill_heal", now, 30_000L)) {
-                killer.heal(10.0F); // 5 hearts
-                killer.sendSystemMessage(Component.literal("King's Wrath kill perk: restored 5 hearts.")
-                        .withStyle(ChatFormatting.GOLD));
-            }
-        } else if (rank == 3) {
-            if (ready(killer.getUUID(), "kill_heal", now, 30_000L)) {
-                killer.heal(6.0F); // 3 hearts
-                grantAbsorption(killer, 8.0F, 15_000L); // 4 hearts for 15s
-                killer.sendSystemMessage(Component.literal("Blood Feast: +3 hearts, +4 absorption hearts for 15s, and Strength I for 30s.")
-                        .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
-            }
-        } else if (rank == 2) {
-            // #2 does not inherit #3's kill-heal package; its identity is the stronger emergency sustain ability.
-        } else if (rank <= 6) {
-            if (ready(killer.getUUID(), "kill_heal", now, 30_000L)) {
-                killer.heal(5.0F); // 2.5 hearts
-                killer.sendSystemMessage(Component.literal("Hunter's Recovery: restored 2.5 hearts.")
-                        .withStyle(ChatFormatting.GOLD));
-            }
+        if (hasAbility(killer, AbilityDefinition.VAMPIRIC_STRIKE.id()) && ready(id, "vampiric_strike", now, 30_000L)) {
+            killer.heal(10.0F);
+            cue(killer, AbilityDefinition.VAMPIRIC_STRIKE, true);
+        }
+        if (hasAbility(killer, AbilityDefinition.WARRIORS_MOMENTUM.id()) && ready(id, "warriors_momentum", now, 30_000L)) {
+            killer.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 15 * 20, 0, false, false, true));
+            killer.addEffect(new MobEffectInstance(MobEffects.SPEED, 15 * 20, 1, false, false, true));
+            cue(killer, AbilityDefinition.WARRIORS_MOMENTUM, true);
+        }
+        if (hasAbility(killer, AbilityDefinition.CHAMPIONS_FEAST.id()) && ready(id, "champions_feast", now, 45_000L)) {
+            killer.heal(10.0F);
+            grantAbsorption(killer, 10.0F, 15_000L);
+            cue(killer, AbilityDefinition.CHAMPIONS_FEAST, true);
+        }
+        if (hasAbility(killer, AbilityDefinition.DOMINANCE.id()) && ready(id, "dominance", now, 45_000L)) {
+            killer.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 15 * 20, 1, false, false, true));
+            cue(killer, AbilityDefinition.DOMINANCE, true);
+        }
+        if (hasAbility(killer, AbilityDefinition.APEX_PREDATOR.id()) && ready(id, "apex_predator", now, 45_000L)) {
+            killer.addEffect(new MobEffectInstance(MobEffects.SPEED, 15 * 20, 1, false, false, true));
+            killer.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 15 * 20, 1, false, false, true));
+            killer.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 15 * 20, 0, false, false, true));
+            cue(killer, AbilityDefinition.APEX_PREDATOR, true);
         }
     }
 
     private static void maintainPermanentTopThreeEffects(ServerPlayer player, int rank) {
-        // Refreshed short-duration effects behave as permanent while eligible and
-        // naturally expire shortly after a rank/settings change without deleting
-        // unrelated long-duration potion effects.
         if (player.tickCount % 100 != 0) return;
+        if (rank <= 3) refreshEffect(player, MobEffects.FIRE_RESISTANCE, 0, 300);
+        if (rank == 2) refreshEffect(player, MobEffects.SPEED, 0, 300);
+        else if (rank == 1) refreshEffect(player, MobEffects.SPEED, 1, 300);
+    }
 
-        if (rank <= 3) {
-            refreshEffect(player, MobEffects.FIRE_RESISTANCE, 0, 300);
+    private static void maintainSelectablePermanentEffects(ServerPlayer player) {
+        if (player.tickCount % 40 != 0) return;
+        if (hasAbility(player, AbilityDefinition.FIREBORN.id())) {
+            refreshEffect(player, MobEffects.FIRE_RESISTANCE, 0, 100);
         }
-        if (rank == 2) {
-            refreshEffect(player, MobEffects.SPEED, 0, 300); // Speed I
-        } else if (rank == 1) {
-            refreshEffect(player, MobEffects.SPEED, 1, 300); // Speed II
+        // Royal Guard is intentionally conditional rather than a timed proc.
+        // A short refreshed instance fades quickly after the player rises above 50%.
+        float fraction = player.getMaxHealth() <= 0.0F ? 1.0F : player.getHealth() / player.getMaxHealth();
+        if (hasAbility(player, AbilityDefinition.ROYAL_GUARD.id()) && fraction < 0.50F) {
+            refreshEffect(player, MobEffects.RESISTANCE, 1, 60);
         }
     }
 
@@ -130,17 +162,17 @@ public final class RankAbilities {
                                       int amplifier,
                                       int duration) {
         MobEffectInstance current = player.getEffect(effect);
-        if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= 120) {
+        if (current == null || current.getAmplifier() < amplifier || current.getDuration() <= 40) {
             player.addEffect(new MobEffectInstance(effect, duration, amplifier, false, false, true));
         }
     }
 
     private static void updatePassiveAttributes(ServerPlayer player, int rank) {
-        boolean enabled = abilitiesEnabled();
+        boolean enabled = abilitiesEnabled() && rank >= 1 && rank <= 10;
         setAttributeModifier(player.getAttribute(Attributes.FALL_DAMAGE_MULTIPLIER), FALL_REDUCTION_ID,
-                enabled && rank >= 1 && rank <= 9 ? -0.25D : 0.0D);
+                enabled && hasAbility(player, AbilityDefinition.FEATHERSTEP.id()) ? -0.30D : 0.0D);
         setAttributeModifier(player.getAttribute(Attributes.KNOCKBACK_RESISTANCE), KNOCKBACK_REDUCTION_ID,
-                enabled && rank >= 1 && rank <= 7 ? 0.10D : 0.0D);
+                enabled && hasAbility(player, AbilityDefinition.STEADFAST.id()) ? 0.10D : 0.0D);
     }
 
     private static void setAttributeModifier(AttributeInstance attribute, Identifier id, double desired) {
@@ -155,102 +187,82 @@ public final class RankAbilities {
         attribute.addPermanentModifier(new AttributeModifier(id, desired, AttributeModifier.Operation.ADD_VALUE));
     }
 
-    private static void applyLowHealthAbilities(ServerPlayer player, int rank, long now) {
+    private static void applyLowHealthAbilities(ServerPlayer player, long now) {
         float fraction = player.getMaxHealth() <= 0.0F ? 1.0F : player.getHealth() / player.getMaxHealth();
         UUID id = player.getUUID();
 
-        // #4 unlock remains cumulative for Top 4: a visible 15-second emergency shield.
-        if (rank <= 4 && fraction < 0.50F && ready(id, "below_50_absorption", now, 45_000L)) {
-            grantAbsorption(player, 8.0F, 15_000L); // 4 hearts
-            player.sendSystemMessage(Component.literal("Revenge activated: +4 absorption hearts for 15s.")
-                    .withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
-            if (rank == 4) visualCue(player, 4);
+        if (hasAbility(player, AbilityDefinition.LAST_STAND.id())
+                && fraction < 0.35F && ready(id, "last_stand", now, 45_000L)) {
+            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 10 * 20, 0, false, false, true));
+            cue(player, AbilityDefinition.LAST_STAND, false);
         }
-
-        // #5 unlock remains cumulative for Top 5. Make entering the Top 5 feel meaningfully stronger.
-        if (rank <= 5 && fraction < 0.40F && ready(id, "below_40_rush", now, 30_000L)) {
-            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 15 * 20, 0, false, false, true));
+        if (hasAbility(player, AbilityDefinition.ABSORPTION_GUARD.id())
+                && fraction < 0.50F && ready(id, "absorption_guard", now, 45_000L)) {
+            grantAbsorption(player, 6.0F, 15_000L);
+            cue(player, AbilityDefinition.ABSORPTION_GUARD, false);
+        }
+        if (hasAbility(player, AbilityDefinition.IRON_HEART.id())
+                && fraction < 0.40F && ready(id, "iron_heart", now, 45_000L)) {
+            player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 10 * 20, 1, false, false, true));
+            cue(player, AbilityDefinition.IRON_HEART, false);
+        }
+        if (hasAbility(player, AbilityDefinition.BERSERKER.id())
+                && fraction < 0.40F && ready(id, "berserker", now, 30_000L)) {
             player.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 15 * 20, 0, false, false, true));
-            grantAbsorption(player, 6.0F, 15_000L); // 3 hearts; won't lower a stronger active shield
-            player.sendSystemMessage(Component.literal("Berserker: Speed I + Strength I + 3 absorption hearts for 15s.")
-                    .withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
-            if (rank == 5) visualCue(player, 5);
+            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 15 * 20, 0, false, false, true));
+            cue(player, AbilityDefinition.BERSERKER, true);
         }
-
-        // #1 and #2 are unique upgrades and do not double-trigger each other's emergency package.
-        if (rank == 1 && fraction < 0.35F && ready(id, "top_emergency", now, 60_000L)) {
-            // Permanent Speed II already belongs to Rank #1, so the activation focuses on combat power/defence.
-            player.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 20 * 20, 1, false, false, true)); // Strength II
-            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20 * 20, 1, false, false, true)); // Resistance II
-            player.sendSystemMessage(Component.literal("KING'S WRATH: Strength II + Resistance II for 20s!")
-                    .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
-            visualCue(player, 1);
-        } else if (rank == 2 && fraction < 0.30F && ready(id, "top_emergency", now, 60_000L)) {
-            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 20 * 20, 1, false, false, true)); // Speed II burst
-            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20 * 20, 1, false, false, true)); // Resistance II
-            player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 20 * 20, 2, false, false, true)); // Regeneration III
-            player.sendSystemMessage(Component.literal("SECOND WIND: Speed II + Resistance II + Regeneration III for 20s!")
-                    .withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
-            visualCue(player, 2);
+        if (hasAbility(player, AbilityDefinition.SECOND_WIND.id())
+                && fraction < 0.30F && ready(id, "second_wind", now, 60_000L)) {
+            player.addEffect(new MobEffectInstance(MobEffects.SPEED, 20 * 20, 1, false, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20 * 20, 1, false, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 20 * 20, 2, false, false, true));
+            cue(player, AbilityDefinition.SECOND_WIND, true);
+        }
+        if (hasAbility(player, AbilityDefinition.KINGS_WRATH.id())
+                && fraction < 0.35F && ready(id, "kings_wrath", now, 60_000L)) {
+            player.addEffect(new MobEffectInstance(MobEffects.STRENGTH, 20 * 20, 1, false, false, true));
+            player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 20 * 20, 1, false, false, true));
+            cue(player, AbilityDefinition.KINGS_WRATH, true);
         }
     }
 
-    /** Approximate the #4 Guard from the actual health lost on a significant PvP hit. */
-    private static void applyGuardAfterPvPHit(ServerPlayer player, int rank, long now) {
-        if (rank > 4) return;
+    /** Revenge triggers only from a significant hit attributed to another online player. */
+    private static void applyGuardAfterPvPHit(ServerPlayer player, long now) {
+        if (!hasAbility(player, AbilityDefinition.REVENGE.id())) return;
         UUID id = player.getUUID();
         Float previous = LAST_HEALTH.get(id);
         if (previous == null) return;
         float lost = previous - player.getHealth();
-        if (lost < 2.0F) return; // "significant" = at least one full heart of real health lost
+        if (lost < 2.0F) return;
 
         UUID attackerId = CombatMod.lastAttackerMap.get(id);
         if (attackerId == null || attackerId.equals(id)) return;
         MinecraftServer server = CombatMod.serverInstance;
         if (server == null || server.getPlayerList().getPlayer(attackerId) == null) return;
 
-        if (ready(id, "guard", now, 30_000L)) {
-            float refund = lost * 0.15F;
-            player.heal(refund);
+        if (ready(id, "revenge", now, 30_000L)) {
+            player.heal(lost * 0.15F);
             player.addEffect(new MobEffectInstance(MobEffects.RESISTANCE, 15 * 20, 0, false, false, true));
-            player.sendSystemMessage(Component.literal("Revenge: refunded 15% of that hit + Resistance I for 15s.")
-                    .withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
-            if (rank == 4) visualCue(player, 4);
+            cue(player, AbilityDefinition.REVENGE, true);
         }
     }
 
-    private static void visualCue(ServerPlayer player, int rank) {
-        // Per-player particles keep the effect readable without flooding the whole server.
-        // Different vanilla particle types give the Top 5 distinct visual identities.
+    private static void cue(ServerPlayer player, AbilityDefinition ability, boolean strong) {
         var level = player.level();
-        switch (rank) {
-            case 1 -> {
-                level.sendParticles(player, ParticleTypes.FLAME, true, true, player.getX(), player.getY() + 1.0, player.getZ(),
-                        35, 0.55, 0.85, 0.55, 0.03);
-                playAbilitySound(player, "minecraft:item.totem.use", 1.0F, 1.15F);
-            }
-            case 2 -> {
-                level.sendParticles(player, ParticleTypes.SOUL_FIRE_FLAME, true, true, player.getX(), player.getY() + 1.0, player.getZ(),
-                        30, 0.50, 0.80, 0.50, 0.025);
-                playAbilitySound(player, "minecraft:block.amethyst_block.chime", 1.0F, 1.25F);
-            }
-            case 3 -> {
-                level.sendParticles(player, ParticleTypes.DAMAGE_INDICATOR, true, true, player.getX(), player.getY() + 1.0, player.getZ(),
-                        22, 0.45, 0.70, 0.45, 0.02);
-                playAbilitySound(player, "minecraft:entity.player.attack.crit", 1.0F, 0.95F);
-            }
-            case 4 -> {
-                level.sendParticles(player, ParticleTypes.CRIT, true, true, player.getX(), player.getY() + 1.0, player.getZ(),
-                        20, 0.45, 0.65, 0.45, 0.02);
-                playAbilitySound(player, "minecraft:item.shield.block", 0.9F, 1.05F);
-            }
-            case 5 -> {
-                level.sendParticles(player, ParticleTypes.FLAME, true, true, player.getX(), player.getY() + 0.8, player.getZ(),
-                        18, 0.40, 0.55, 0.40, 0.02);
-                playAbilitySound(player, "minecraft:entity.ravager.roar", 0.65F, 1.35F);
-            }
-            default -> { }
-        }
+        var particle = switch (ability) {
+            case KINGS_WRATH, BERSERKER, DOMINANCE -> ParticleTypes.FLAME;
+            case SECOND_WIND, ROYAL_GUARD -> ParticleTypes.SOUL_FIRE_FLAME;
+            case BLOOD_FEAST, VAMPIRIC_STRIKE, CHAMPIONS_FEAST -> ParticleTypes.DAMAGE_INDICATOR;
+            default -> ParticleTypes.CRIT;
+        };
+        level.sendParticles(player, particle, true, true,
+                player.getX(), player.getY() + 1.0, player.getZ(), strong ? 28 : 14,
+                0.45, 0.70, 0.45, 0.02);
+        playAbilitySound(player, strong ? "minecraft:item.totem.use" : "minecraft:entity.experience_orb.pickup",
+                strong ? 0.9F : 0.55F, strong ? 1.15F : 1.25F);
+        player.sendSystemMessage(Component.literal(ability.displayName() + " activated!")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), true);
     }
 
     private static void playAbilitySound(ServerPlayer player, String sound, float volume, float pitch) {
@@ -269,7 +281,6 @@ public final class RankAbilities {
         float current = player.getAbsorptionAmount();
         float target = Math.max(current, healthPoints);
         player.setAbsorptionAmount(target);
-
         AbsorptionGrant old = ABSORPTION.get(id);
         if (old == null || healthPoints >= old.healthPoints || expires > old.expiresAt) {
             ABSORPTION.put(id, new AbsorptionGrant(Math.max(healthPoints, old == null ? 0.0F : old.healthPoints),
@@ -280,7 +291,6 @@ public final class RankAbilities {
     private static void maintainAbsorption(ServerPlayer player, long now) {
         AbsorptionGrant grant = ABSORPTION.get(player.getUUID());
         if (grant == null || now < grant.expiresAt) return;
-        // Only remove up to the amount our perk supplied. Damage may already have consumed it.
         player.setAbsorptionAmount(Math.max(0.0F, player.getAbsorptionAmount() - grant.healthPoints));
         ABSORPTION.remove(player.getUUID());
     }
@@ -305,7 +315,6 @@ public final class RankAbilities {
             LAST_ANNOUNCED_RANK.put(id, rank);
             return;
         }
-
         LAST_ANNOUNCED_RANK.put(id, rank);
         sendRankSummary(player, rank);
     }
@@ -317,7 +326,10 @@ public final class RankAbilities {
         if (!permanent.isEmpty()) {
             player.sendSystemMessage(Component.literal("Permanent: " + permanent).withStyle(ChatFormatting.RED));
         }
-        player.sendSystemMessage(Component.literal("Rank ability: " + featuredAbility(rank)).withStyle(ChatFormatting.AQUA));
+        int slots = AbilityDefinition.slotsForRank(rank);
+        player.sendSystemMessage(Component.literal("Selectable abilities: " + slots + " slot" + (slots == 1 ? "" : "s")
+                + " — use /ranked abilities")
+                .withStyle(ChatFormatting.AQUA));
         if (!ConfigManager.getConfig().topRanksEffectsEnabled) {
             player.sendSystemMessage(Component.literal("Rank abilities/effects are currently disabled by the server setting.")
                     .withStyle(ChatFormatting.GRAY));
@@ -334,22 +346,6 @@ public final class RankAbilities {
             case 2 -> "Fire Resistance + Speed I";
             case 3 -> "Fire Resistance";
             default -> "";
-        };
-    }
-
-    private static String featuredAbility(int rank) {
-        return switch (rank) {
-            case 10 -> "First Blood: PvP kill gives Speed I + Regeneration I for 15s (30s cooldown).";
-            case 9 -> "Featherstep: 25% less fall damage.";
-            case 8 -> "Relentless: 15% less sprint exhaustion/hunger; keeps First Blood as you climb.";
-            case 7 -> "Steadfast: 10% knockback resistance.";
-            case 6 -> "Hunter's Recovery: PvP kill restores 2.5 hearts (30s cooldown).";
-            case 5 -> "Berserker: below 40% HP -> Speed I + Strength I + 3 absorption hearts for 15s (30s cooldown).";
-            case 4 -> "Revenge: significant PvP hit -> 15% heal-back + Resistance I for 15s (30s); below 50% HP -> 4 absorption hearts for 15s (45s).";
-            case 3 -> "Blood Feast: PvP kill -> restore 3 hearts + 4 absorption hearts for 15s + Strength I for 30s.";
-            case 2 -> "Second Wind: below 30% HP -> Speed II + Resistance II + Regeneration III for 20s (60s cooldown).";
-            case 1 -> "King's Wrath: below 35% HP -> Strength II + Resistance II for 20s (60s); PvP kill restores 5 hearts (30s).";
-            default -> "Unranked.";
         };
     }
 }

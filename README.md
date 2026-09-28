@@ -176,3 +176,15 @@ This release intercepts the actual execution path and blocks `/spawn`, `/home`, 
 - `/homes` is intentionally NOT blocked because it is an admin management command on Chill Zone.
 - Namespaced variants of the blocked roots are still caught.
 - Existing ranked ability rework and spawn-protection-on-attack removal remain unchanged.
+
+## 1.4.0-alpha selectable ranked abilities prototype
+
+`/ranked abilities` now opens a player-facing 54-slot ability loadout GUI.
+Every rank can choose abilities; higher ranks unlock a larger ability pool and more simultaneous slots.
+Unranked players can browse the full menu but cannot equip anything.
+
+The selectable system does **not** change rank health or the established Top-3 permanent effects.
+Loadouts persist in `config/chillzone-combat/ability-loadouts.json`, are pruned automatically after a demotion,
+and cannot be edited while the player is combat-tagged.
+
+See `ABILITY_PLAN.md` for the current prototype pool and exact effects.

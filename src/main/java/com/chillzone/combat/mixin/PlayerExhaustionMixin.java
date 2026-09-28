@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Rank #8+ perk: reduce sprint-related exhaustion by 15%.
+ * Selectable Runner's Instinct ability: reduce sprint-related exhaustion by 20%.
  *
  * Minecraft 26.2 no longer exposes Player.checkMovementStatistics, so the old
  * injection target crashed at startup. 26.2 still funnels food exhaustion
@@ -28,7 +28,7 @@ public abstract class PlayerExhaustionMixin {
         Object self = this;
         if (!(self instanceof ServerPlayer player)
                 || !player.isSprinting()
-                || !RankAbilities.hasPerk(player, 8)) {
+                || !RankAbilities.hasAbility(player, "runners_instinct")) {
             return amount;
         }
 
@@ -38,7 +38,7 @@ public abstract class PlayerExhaustionMixin {
         // the public 26.2 API allows without injecting into a removed method.
         if (Float.compare(amount, FoodConstants.EXHAUSTION_SPRINT) == 0
                 || Float.compare(amount, FoodConstants.EXHAUSTION_SPRINT_JUMP) == 0) {
-            return amount * 0.85F;
+            return amount * 0.80F;
         }
         return amount;
     }
