@@ -1,0 +1,7 @@
+Chill Zone Combat 1.4.1-alpha ranked abilities GUI build fix
+
+Fixes the Minecraft 26.2 official-mappings compile errors in RankedAbilitiesGui.java where colored stained-glass pane block-items are no longer exposed through the Items constants used by the first prototype.
+
+The GUI now creates its green/yellow/red status indicators from Blocks.LIME_STAINED_GLASS_PANE, Blocks.YELLOW_STAINED_GLASS_PANE, and Blocks.RED_STAINED_GLASS_PANE via asItem().
+
+No ranked-ability behavior, slot limits, health scaling, permanent Top-3 effects, command locks, or loadout rules were changed.
